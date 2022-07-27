@@ -69,11 +69,11 @@ button:active {
 }
 
 #finished-projects {
-  border-color: #0044ff;
+  border-color: #229b28;
 }
 
 #finished-projects header {
-  background: #0044ff;
+  background: #229b28;
 }
 
 .projects h2 {
