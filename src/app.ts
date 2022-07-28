@@ -1,3 +1,18 @@
+//Project State Management
+class ProjectSate {
+    private projects: any[] = [];
+
+    addProject(title: string, description: string, numOfPeople:number){
+        const newProject ={
+            id: Math.random().toString(),
+            title: title,
+            description: description, 
+            people: numOfPeople
+        };
+        this.projects.push(newProject);
+    }
+}
+
 interface Validatable {
     value: string | number; 
     required?: boolean; 
