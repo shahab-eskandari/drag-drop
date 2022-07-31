@@ -1,11 +1,40 @@
+
+//Project type 
+enum ProjectStatus {
+    Active, 
+    Finished
+}
+
+class Project {
+    constructor(
+        public id:string, 
+        public title: string, 
+        public description: string, 
+        public people: number,
+        public status: ProjectStatus
+    ){}
+}
+
+//Listener type 
+type Listener<T> = (items: T[])=>void; 
+
+
 //Project State Management
-class ProjectSate {
-    private listeners: any[] = []; 
-    private projects: any[] = [];
+
+class State<T>{
+    protected listeners: Listener<T>[] = [];
+    addListener(listenerFn: Listener<T>){
+        this.listeners.push(listenerFn);
+    } 
+}
+
+class ProjectSate extends State<Project> {
+    
+    private projects: Project[] = [];
     private static instance : ProjectSate;
 
     private constructor(){
-
+        super()
     }
 
     static getInstance (){
@@ -17,18 +46,17 @@ class ProjectSate {
         }
     }
 
-    addListener(listenerFn: Function){
-        this.listeners.push(listenerFn);
-    }
-
     addProject(title: string, description: string, numOfPeople:number){
-        const newProject ={
-            id: Math.random().toString(),
-            title: title,
-            description: description, 
-            people: numOfPeople
-        };
+        const newProject = new Project(
+            Math.random().toString(),
+            title,
+            description, 
+            numOfPeople,
+            ProjectStatus.Active
+        )
+
         this.projects.push(newProject);
+        
         for(const listenerFn of this.listeners){
             listenerFn(this.projects.slice());
         }
@@ -36,6 +64,9 @@ class ProjectSate {
 }
 
 const projectState = ProjectSate.getInstance(); 
+
+//========================================================================
+//Implementing the validation process: 
 
 interface Validatable {
     value: string | number; 
@@ -82,38 +113,61 @@ function validate(input:Validatable){
 
     return isValid; 
 }
+//=================================================================================
 
-class ProjectList{
+//component base element 
+abstract class Component<T extends HTMLElement, U extends HTMLElement> {
     templateElement: HTMLTemplateElement; 
-    hostElement: HTMLDivElement; 
-    element : HTMLElement;
-    assignedProjects: any[]; 
+    hostElement: T; 
+    element : U;
+
+    constructor(
+        templateId: string, 
+        hostElementId: string,
+        insertPlace: 'afterbegin' | 'beforeend', 
+        newElementId?: string
+    ){
+        this.templateElement = <HTMLTemplateElement>document.getElementById(templateId)!;
+        this.hostElement = document.getElementById(hostElementId)! as T;
+
+        const importedNode = document.importNode(this.templateElement.content, true);
+        
+        this.element = importedNode.firstElementChild as U;
+        //adding the id to element if there is any:
+        if(newElementId){
+            this.element.id = newElementId;
+        }
+
+        this.attach(insertPlace); 
+    }
+
+    private attach(insertLocation:'afterbegin' | 'beforeend'){
+        this.hostElement.insertAdjacentElement(
+            insertLocation, this.element);
+    }
+
+    abstract configure(): void;
+    abstract renderContent(): void;
+}
+
+//===============================================
+
+class ProjectList extends Component<HTMLDivElement,HTMLElement> {
+    
+    assignedProjects: Project[]; 
 
     constructor(private type:'active'|'finished'){
-        this.templateElement = <HTMLTemplateElement>document.getElementById('project-list')!;
-        this.hostElement = <HTMLDivElement> document.getElementById('app')!;
+        super('project-list','app','beforeend',`${type}-projects`); 
         
         this.assignedProjects=[];
-        //importNode creates a copy of its first arqument
-        //template.content returns everything beteen <template> and </template> 
-        const importedNode = document.importNode(this.templateElement.content, true);
-        console.log(importedNode.firstChild) //for remiding the difference between firstChild and firstElementChild
 
-        this.element = importedNode.firstElementChild as HTMLElement;
-        //adding the id to form for applying CSS
-        this.element.id = `${this.type}-projects`;
-        
-        projectState.addListener((projects: any[])=>{
-            this.assignedProjects = projects;
-            this.renderProjects();
-        })
-
-        this.attach();
+        this.configure();
         this.renderContent();
     }
 
     private renderProjects(){
         const listEl = document.getElementById(`${this.type}-projects-list`)! as HTMLUListElement;
+        listEl.innerHTML = '';
         for (const projectItem of this.assignedProjects){
             const listItem = document.createElement('li');
             listItem.textContent = projectItem.title;
@@ -121,21 +175,28 @@ class ProjectList{
         }
     }
 
-    private renderContent(){
+    configure(): void {
+        projectState.addListener((projects: Project[])=>{
+            const relevantProjects  = projects.filter((prj)=>{
+                if(this.type === 'active'){
+                    return prj.status === ProjectStatus.Active;
+                }
+                return prj.status === ProjectStatus.Finished;  
+            })
+            this.assignedProjects = relevantProjects;
+            this.renderProjects();
+        })
+        
+    }
+
+    renderContent(){
         const listId = `${this.type}-projects-list`;
         this.element.querySelector('ul')!.id = listId; 
         this.element.querySelector('h2')!.textContent = this.type.toLocaleUpperCase() + ' PROJECTS';
     }
-
-    private attach(){
-        this.hostElement.insertAdjacentElement('beforeend',this.element);
-    }
 } 
 
-class ProjectInput{
-    templateElement: HTMLTemplateElement; 
-    hostElement: HTMLDivElement; 
-    element : HTMLFormElement;
+class ProjectInput extends Component<HTMLDivElement,HTMLFormElement>{
     
     //accessing to inputs in the form: 
     titleInputElement: HTMLInputElement; 
@@ -143,31 +204,36 @@ class ProjectInput{
     peopleInputElement: HTMLInputElement; 
 
     constructor(){
-        this.templateElement = <HTMLTemplateElement>document.getElementById('project-input')!;
-        this.hostElement = <HTMLDivElement> document.getElementById('app')!;
-    
-        //importNode creates a copy of its first arqument
-        //template.content returns everything beteen <template> and </template> 
-        const importedNode = document.importNode(this.templateElement.content, true);
-        console.log(importedNode.firstChild) //for remiding the difference between firstChild and firstElementChild
-
-        this.element = importedNode.firstElementChild as HTMLFormElement;
-        //adding the id to form for applying CSS
-        this.element.id = 'user-input';
+        super('project-input','app','afterbegin','user-input')
         
-        //initializing the input elements in the form: 
-        //this.titleInputElement = document.querySelector('#title') as HTMLInputElement;
         this.titleInputElement = this.element.querySelector('#title') as HTMLInputElement;
         this.descriptionInputElement = this.element.querySelector('#description') as HTMLInputElement;
         this.peopleInputElement = this.element.querySelector('#people') as HTMLInputElement; 
-        console.log(this.titleInputElement);
-        console.log(this.descriptionInputElement); 
-        console.log(this.peopleInputElement);
+
+        //importNode creates a copy of its first arqument
+        //template.content returns everything beteen <template> and </template> 
+        // const importedNode = document.importNode(this.templateElement.content, true);
+        // console.log(importedNode.firstChild) //for remiding the difference between firstChild and firstElementChild
+
+        // this.element = importedNode.firstElementChild as HTMLFormElement;
+        // //adding the id to form for applying CSS
+        // this.element.id = 'user-input';
+        
+        //initializing the input elements in the form: 
+        //this.titleInputElement = document.querySelector('#title') as HTMLInputElement;
         
         this.configure();
 
         //attach method will put the form inside of the template into the target(host) element
-        this.attach(); 
+        //this.attach(); 
+    }
+
+    configure (){    
+        this.element.addEventListener('submit', this.submitHandler.bind(this))
+    }
+
+    renderContent(): void {
+        
     }
 
     private getInputs ():[string,string,number] | void{
@@ -216,14 +282,6 @@ class ProjectInput{
             projectState.addProject(title,desc,people);
             this.clearInputs();
         }
-    }
-
-    private configure (){
-        this.element.addEventListener('submit', this.submitHandler.bind(this))
-    }
-
-    private attach(){
-        this.hostElement.insertAdjacentElement('afterbegin',this.element);
     }
 }
 
